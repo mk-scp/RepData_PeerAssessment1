@@ -5,21 +5,134 @@ output:
     keep_md: true
 ---
 
+```{r setup, include = FALSE}
+
+curr_language_settings <- Sys.getlocale("LC_TIME")
+Sys.setlocale("LC_TIME", "English_United States.1252")
+```
+
 
 ## Loading and preprocessing the data
 
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 
+# load packages
+library("tidyverse")
+library("ggplot2")
+
+# remove scientific notation
+options(scipen=999)
+
+# unzip data
+if (!file.exists("activity.csv")) {
+    unzip("activity.zip")
+}
+
+# load data
+activity_data <- read.csv("activity.csv") %>% 
+    mutate(date = as.Date(date))
+```
 
 ## What is mean total number of steps taken per day?
 
+```{r echo = TRUE, message=FALSE}
 
+steps_per_day <- activity_data %>% 
+    group_by(date) %>% 
+    summarise(steps = sum(steps, na.rm = TRUE))
+
+steps_mean <- mean(steps_per_day$steps)
+steps_median <- median(steps_per_day$steps)
+
+ggplot(steps_per_day, aes(x=steps)) +
+    geom_histogram(color = "white", fill = "darkgrey") +
+    labs(
+        title = "Total steps per day"
+    )
+```
+
+The **mean** of total steps taken per day is **`r round(steps_mean, 0)`**.  
+The **median** of total steps taken per day is **`r round(steps_median, 0)`**.
 
 ## What is the average daily activity pattern?
 
+```{r}
 
+avg_day <- activity_data %>% 
+    group_by(interval) %>% 
+    summarise(steps = mean(steps, na.rm = TRUE))
+
+max_steps_interval <- avg_day %>% 
+    filter(steps == max(steps)) %>% 
+    .$interval
+
+ggplot(avg_day, aes(x=interval, y=steps)) +
+    geom_line(color = "darkgrey", lwd = 0.8) +
+    labs(
+        title = "Average daily activity pattern"
+    )
+```
+
+Interval **`r max_steps_interval`** contains, on average, the **maximum number** of steps.
 
 ## Imputing missing values
 
+Strategy for filling in missing values: use median of that 5-minute interval.
+
+```{r echo=TRUE, message=FALSE}
+
+total_nas <- activity_data %>% 
+    filter(is.na(steps) | is.na(date) | is.na(interval)) %>% 
+    nrow()
+
+data_filled_nas <- activity_data %>% 
+    group_by(interval) %>% 
+    mutate(steps = ifelse(is.na(steps), median(steps, na.rm = TRUE), steps)) %>% 
+    ungroup()
+
+steps_per_day_filled_nas <- data_filled_nas %>% 
+    group_by(date) %>% 
+    summarise(steps = sum(steps, na.rm = TRUE))
+
+steps_mean_filled_nas <- mean(steps_per_day_filled_nas$steps)
+steps_median_filled_nas <- median(steps_per_day_filled_nas$steps)
+
+ggplot(steps_per_day_filled_nas, aes(x=steps)) +
+    geom_histogram(color = "white", fill = "darkgrey") +
+    labs(
+        title = "Total steps per day (NAs filled with median)"
+    )
+```
+
+The total **number of missing values** is **`r total_nas`**.  
+
+The **mean** of total steps taken per day is **`r round(steps_mean_filled_nas, 0)`** when using imputed data.  
+The **median** of total steps taken per day is **`r round(steps_median_filled_nas, 0)`** when using imputed data.  
+
+Therefore, the **difference** in the **mean** is **`r round(steps_mean_filled_nas, 0) - round(steps_mean, 0)`** steps compared to the data set without where the NAs have been omitted and **`r  round(steps_median_filled_nas, 0) -  round(steps_median, 0)`** steps for the **median**.  
+
+Due to the fact that the NAs are filled with the median of the interval, the mean is "pulled" towards the median. 
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r echo=TRUE, message=FALSE}
+
+week_activity <- data_filled_nas %>%
+    mutate(week_period = weekdays(date)) %>% 
+    mutate(week_period = ifelse(week_period %in% c("Saturday", "Sunday"), "weekend", "weekday")) %>% 
+    mutate(week_period = as.factor(week_period)) %>% 
+    group_by(week_period, interval) %>% 
+    summarise(steps = mean(steps))
+    
+ggplot(week_activity, aes(x=interval, y=steps)) +
+    geom_line(color = "darkgrey", lwd = 0.8) +
+    facet_wrap(. ~ week_period, nrow = 2) +
+    labs(title = "Average number of steps per interval")
+```
+
+```{r reset_language_settings, include = FALSE}
+
+Sys.setlocale("LC_TIME", curr_language_settings)
+```
+
